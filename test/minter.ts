@@ -128,7 +128,43 @@ describe("Minter Contract", function () {
       };
       await minter.connect(manager).setTier(1, tier1.price, tier1.ranges);
       await minter.connect(manager).setTier(2, tier2.price, tier2.ranges);
-      // await minter.connect(manager).setTiers([1, 2, 3], [tier1.price, tier2.price, tier3.price], [tier1.ranges, tier2.ranges, tier3.ranges]);
+
+      await expect(minter.connect(user).setTier(3, tier3.price, tier3.ranges)).to.be.revertedWithCustomError;
+
+      await minter.connect(manager).setTiers([1, 2, 3], [tier1.price, tier2.price, tier3.price], [tier1.ranges, tier2.ranges, tier3.ranges]);
+
+      await expect(minter.connect(manager).setTiers([1, 2], [tier1.price, tier2.price], [tier1.ranges, tier2.ranges, tier3.ranges])).to.be.revertedWithCustomError(minter, "INVALID_ARRAY_LENGTH");
+
+      await expect(minter.connect(manager).setTiers([1, 2], [tier1.price, tier2.price], [tier1.ranges, tier2.ranges,])).to.be.revertedWithCustomError;
+    });
+
+    it("Check tiers and prices", async function () {
+      const tier1 = await minter.getTokenTier(500);
+      const tier2 = await minter.getTokenTier(501);
+      const tier3 = await minter.getTokenTier(11200);
+
+      expect(tier1).to.be.equal(1n);
+      expect(tier2).to.be.equal(2n);
+      expect(tier3).to.be.equal(3n);
+
+      const tier1Detail = await minter.getTier(1);
+      const tier2Detail = await minter.getTier(2);
+      const tier3Detail = await minter.getTier(3);
+
+      expect(tier1Detail.price).to.be.equal(ethers.parseEther("1"));
+      expect(tier2Detail.price).to.be.equal(ethers.parseEther("2"));
+      expect(tier3Detail.price).to.be.equal(ethers.parseEther("3"));
+
+      const tier1Price = await minter.getTokenPrice(500);
+      const tier2Price = await minter.getTokenPrice(999);
+      const tier3Price = await minter.getTokenPrice(1300);
+
+      expect(tier1Price).to.be.equal(ethers.parseEther("1"));
+      expect(tier2Price).to.be.equal(ethers.parseEther("2"));
+      expect(tier3Price).to.be.equal(ethers.parseEther("3"));
+
+      await expect(minter.getTokenPrice(7500)).to.be.revertedWithCustomError(minter, "INVALID_TIER");
+
     });
   });
 
@@ -144,6 +180,36 @@ describe("Minter Contract", function () {
     it("Check balance of user", async function () {
       const balance = ethers.parseEther("99");
       expect(await nrgy.balanceOf(userAddress)).to.be.equal(balance);
+    });
+
+
+    it("Mint from user with invalid tier token id", async function () {
+      const tokenId = 10000;
+      await expect(minter.connect(user).mint(userAddress, tokenId)).to.be.revertedWithCustomError(minter, "INVALID_TIER");
+    });
+
+    it("Mint with insufficient balance", async function () {
+      const tokenId = 10;
+      await expect(minter.connect(user2).mint(user2Address, tokenId)).to.be.revertedWithCustomError(minter, "INSUFFICIENT_BALANCE");
+    });
+
+    it("Mint from user", async function () {
+      const tokenId = 500;
+      await minter.connect(user).mint(userAddress, tokenId);
+      expect(await avatarNFT.ownerOf(tokenId)).to.be.equal(userAddress);
+    });
+
+    it("Bulk Mint from minter", async function () {
+      const tokenIds = [100, 600, 1100, 20];
+      const tokenIds2 = [200, 8900, 2000, 30];
+      await expect(minter.connect(user).bulkMint(userAddress, tokenIds2)).to.be.revertedWithCustomError(minter, "INVALID_TIER");
+
+      await expect(minter.connect(user2).bulkMint(userAddress, tokenIds)).to.be.revertedWithCustomError(minter, "INSUFFICIENT_BALANCE");
+
+      await minter.connect(user).bulkMint(userAddress, tokenIds);
+      for (let i = 0; i < tokenIds.length; i++) {
+        expect(await avatarNFT.ownerOf(tokenIds[i])).to.be.equal(userAddress);
+      }
     });
   });
 

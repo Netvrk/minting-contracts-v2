@@ -30,8 +30,8 @@ contract Minter is
         uint256 end;
     }
     struct Tier {
-        Range[] ranges;
         uint256 price;
+        Range[] ranges;
     }
     mapping(uint8 => Tier) public tiers;
 
@@ -72,21 +72,24 @@ contract Minter is
         uint256[] memory prices,
         Range[][] memory ranges
     ) external onlyRole(MANAGER_ROLE) {
-        require(
-            indexes.length == prices.length && indexes.length == ranges.length,
-            "INVALID_ARRAY_LENGTH"
-        );
+        if (indexes.length != prices.length || indexes.length != ranges.length)
+            revert INVALID_ARRAY_LENGTH();
+
         for (uint256 i = 0; i < indexes.length; i++) {
             _setTier(indexes[i], prices[i], ranges[i]);
         }
     }
 
-    function getTier(uint256 tokenId) external view returns (uint8) {
-        return _getTier(tokenId);
+    function getTokenTier(uint256 tokenId) external view returns (uint8) {
+        return _getTokenTier(tokenId);
     }
 
-    function getPrice(uint256 tokenId) external view returns (uint256) {
+    function getTokenPrice(uint256 tokenId) external view returns (uint256) {
         return _getPrice(tokenId);
+    }
+
+    function getTier(uint8 index) external view returns (Tier memory) {
+        return tiers[index];
     }
 
     function setavatarNFTAddress(
@@ -113,18 +116,11 @@ contract Minter is
         avatarNFT.mint(to, tokenId);
     }
 
-    function bulkMint(
-        address[] calldata to,
-        uint256[] calldata tokenIds,
-        uint256[] calldata quantities
-    ) external {
-        if (to.length != tokenIds.length || to.length != quantities.length)
-            revert INVALID_ARRAY_LENGTH();
-
+    function bulkMint(address to, uint256[] calldata tokenIds) external {
         uint256 totalPrice = 0;
 
         for (uint256 i = 0; i < tokenIds.length; i++) {
-            totalPrice += _getPrice(tokenIds[i]) * quantities[i];
+            totalPrice += _getPrice(tokenIds[i]);
         }
 
         if (paymentToken.balanceOf(msg.sender) < totalPrice)
@@ -133,10 +129,8 @@ contract Minter is
         if (!paymentToken.transferFrom(msg.sender, address(this), totalPrice))
             revert PAYMENT_FAILED();
 
-        for (uint256 i = 0; i < to.length; i++) {
-            for (uint256 j = 0; j < quantities[i]; j++) {
-                avatarNFT.mint(to[i], tokenIds[i]);
-            }
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            avatarNFT.mint(to, tokenIds[i]);
         }
     }
 
@@ -154,7 +148,7 @@ contract Minter is
     }
 
     function _getPrice(uint256 tokenId) internal view returns (uint256) {
-        uint8 tierIndex = _getTier(tokenId);
+        uint8 tierIndex = _getTokenTier(tokenId);
         uint256 price = tiers[tierIndex].price;
         if (price == 0) {
             revert INVALID_TIER();
@@ -162,7 +156,7 @@ contract Minter is
         return price;
     }
 
-    function _getTier(uint256 tokenId) internal view returns (uint8) {
+    function _getTokenTier(uint256 tokenId) internal view returns (uint8) {
         for (uint8 i = 0; i < MAX_TIERS; i++) {
             if (tiers[i].price > 0) {
                 for (uint256 j = 0; j < tiers[i].ranges.length; j++) {
