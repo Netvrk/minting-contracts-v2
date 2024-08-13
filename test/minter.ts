@@ -9,21 +9,21 @@ describe("Minter Contract", function () {
   let manager: any;
   let user: any;
   let user2: any;
-  let treasury: any;
+  let user3: any;
   let ownerAddress: string;
   let managerAddress: string;
   let userAddress: string;
   let user2Address: string;
-  let treasuryAddress: string;
+  let user3Address: string;
   let now: number;
 
   before(async function () {
-    [owner, manager, user, user2, treasury] = await ethers.getSigners();
+    [owner, manager, user, user2, user3] = await ethers.getSigners();
     ownerAddress = await owner.getAddress();
     managerAddress = await manager.getAddress();
     userAddress = await user.getAddress();
     user2Address = await user2.getAddress();
-    treasuryAddress = await treasury.getAddress();
+    user3Address = await user3.getAddress();
     now = Math.floor(Date.now() / 1000);
   });
 
@@ -74,56 +74,51 @@ describe("Minter Contract", function () {
     it("Set 100 NRGY to user", async function () {
       const amount = ethers.parseEther("100");
       await nrgy.transfer(userAddress, amount);
+      await nrgy.transfer(user2Address, amount);
       expect(await nrgy.balanceOf(userAddress)).to.be.equal(amount);
+      expect(await nrgy.balanceOf(user2Address)).to.be.equal(amount);
     });
 
     it("Set allowance for minter", async function () {
       const allowance = ethers.parseEther("100");
       const minterAddress = await minter.getAddress();
       await nrgy.connect(user).approve(minterAddress, allowance);
+      await nrgy.connect(user2).approve(minterAddress, allowance);
       expect(await nrgy.allowance(userAddress, minterAddress)).to.be.equal(allowance);
+      expect(await nrgy.allowance(user2Address, minterAddress)).to.be.equal(allowance);
     });
 
     it("Setup Tiers and Prices", async function () {
       const tier1 = {
         price: ethers.parseEther("1"),
         ranges: [
-          {
-            start: 1,
-            end: 500
-          },
-          {
-            start: 10001,
-            end: 10500
-          },
+          [1, 500],
+          [
+            10001,
+            10500
+          ]
         ]
       };
 
       const tier2 = {
         price: ethers.parseEther("2"),
         ranges: [
-          {
-            start: 501,
-            end: 1000
-          },
-          {
-            start: 10501,
-            end: 11000
-          }
+          [501, 1000],
+          [
+            10501,
+            11000
+          ]
         ]
       };
 
       const tier3 = {
         price: ethers.parseEther("3"),
         ranges: [
-          {
-            start: 1001,
-            end: 1500
-          },
-          {
-            start: 11001,
-            end: 11500
-          }
+          [1001, 1500],
+          [
+            11001,
+            11500
+          ]
         ]
       };
       await minter.connect(manager).setTier(1, tier1.price, tier1.ranges);
@@ -190,7 +185,7 @@ describe("Minter Contract", function () {
 
     it("Mint with insufficient balance", async function () {
       const tokenId = 10;
-      await expect(minter.connect(user2).mint(user2Address, tokenId)).to.be.revertedWithCustomError(minter, "INSUFFICIENT_BALANCE");
+      await expect(minter.connect(user3).mint(user3Address, tokenId)).to.be.revertedWithCustomError(minter, "INSUFFICIENT_BALANCE");
     });
 
     it("Mint from user", async function () {
@@ -200,16 +195,43 @@ describe("Minter Contract", function () {
     });
 
     it("Bulk Mint from minter", async function () {
-      const tokenIds = [100, 600, 1100, 20];
-      const tokenIds2 = [200, 8900, 2000, 30];
+      const tokenIds = [100, 600, 1100, 200];
+      const tokenIds2 = [200, 8900, 2000, 300];
       await expect(minter.connect(user).bulkMint(userAddress, tokenIds2)).to.be.revertedWithCustomError(minter, "INVALID_TIER");
 
-      await expect(minter.connect(user2).bulkMint(userAddress, tokenIds)).to.be.revertedWithCustomError(minter, "INSUFFICIENT_BALANCE");
+      await expect(minter.connect(user3).bulkMint(user3Address, tokenIds)).to.be.revertedWithCustomError(minter, "INSUFFICIENT_BALANCE");
 
       await minter.connect(user).bulkMint(userAddress, tokenIds);
       for (let i = 0; i < tokenIds.length; i++) {
         expect(await avatarNFT.ownerOf(tokenIds[i])).to.be.equal(userAddress);
       }
+    });
+
+    it("Mint exceeding maxMintPerWallet", async function () {
+
+      let nftsOfUser2 = await avatarNFT.balanceOf(user2Address);
+      expect(nftsOfUser2).to.be.equal(0n);
+
+      const tokenIds = Array.from({ length: 20 }, (_, i) => i + 51);
+
+      // Mint up to the maxMintPerWallet limit
+      await minter.connect(user2).bulkMint(user2Address, tokenIds);
+      for (let i = 0; i < tokenIds.length; i++) {
+        expect(await avatarNFT.ownerOf(tokenIds[i])).to.be.equal(user2Address);
+      }
+
+      nftsOfUser2 = await avatarNFT.balanceOf(user2Address);
+      // Attempt to mint one more token, which should exceed the maxMintPerWallet limit
+      await expect(minter.connect(user2).mint(user2Address, 333)).to.be.revertedWithCustomError(minter, "MAX_MINT_PER_WALLET_EXCEEDED");
+      await expect(minter.connect(user2).bulkMint(user2Address, [333, 334])).to.be.revertedWithCustomError(minter, "MAX_MINT_PER_WALLET_EXCEEDED");
+
+      // Set max mint per wallet to 30
+      await minter.connect(manager).setMaxMintPerWallet(30);
+
+      // Mint one more and check if it is successful
+      await minter.connect(user2).mint(user2Address, 333);
+      nftsOfUser2 = await avatarNFT.balanceOf(user2Address);
+      expect(nftsOfUser2).to.be.equal(21n);
     });
   });
 

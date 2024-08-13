@@ -1,13 +1,7 @@
-# Sample Hardhat Project
+### Minting contracts for OG Netvrk NFTs
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+#### Test contracts in Holesky Net
 
-Try running some of the following tasks:
-
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat ignition deploy ./ignition/modules/Lock.ts
-```
+- NRGY: [0x14377ab79fDe67fA3A38a0cf89a83736013acdA6](https://holesky.net/contract/0x14377ab79fDe67fA3A38a0cf89a83736013acdA6)
+- AvatarNFT: [0x79c976BC969B58622E0C924462442b6A1eD20C8f](https://holesky.net/contract/0x79c976BC969B58622E0C924462442b6A1eD20C8f)
+- Minter: [0x3d7698870097EC9F026eE46f831ddB8Bf271DEFb](https://holesky.net/contract/0x3d7698870097EC9F026eE46f831ddB8Bf271DEFb)
