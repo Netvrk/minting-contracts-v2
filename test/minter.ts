@@ -4,7 +4,10 @@ import { ethers, upgrades } from "hardhat";
 describe("Minter Contract", function () {
   let nrgy: any;
   let minter: any;
-  let avatarNFT: any;
+  let MintNFT: any;
+  let nrgyAddress: string;
+  let MintNFTAddress: string;
+  let minterAddress: string;
   let owner: any;
   let manager: any;
   let user: any;
@@ -29,25 +32,28 @@ describe("Minter Contract", function () {
 
   describe("Deployments", async function () {
     it("Deploy Avatar NFT", async function () {
-      const avatarNFTContract = await ethers.getContractFactory("AvatarNFT");
-      avatarNFT = await avatarNFTContract.deploy();
-      await avatarNFT.waitForDeployment();
+      const MintNFTContract = await ethers.getContractFactory("MintNFT");
+      MintNFT = await MintNFTContract.deploy();
+      await MintNFT.waitForDeployment();
+      MintNFTAddress = await MintNFT.getAddress();
     });
 
     it("Deploy NRGY", async function () {
       const nrgyContract = await ethers.getContractFactory("NRGY");
       nrgy = await nrgyContract.deploy(ownerAddress);
       await nrgy.waitForDeployment();
+      nrgyAddress = await nrgy.getAddress();
     });
 
     it("Deploy Minter", async function () {
-      const avatarNFTAddress = await avatarNFT.getAddress();
+      const MintNFTAddress = await MintNFT.getAddress();
       const nrgyAddress = await nrgy.getAddress();
       const minterContract = await ethers.getContractFactory("Minter");
-      minter = await upgrades.deployProxy(minterContract, [managerAddress, avatarNFTAddress, nrgyAddress], {
+      minter = await upgrades.deployProxy(minterContract, [managerAddress, MintNFTAddress, nrgyAddress], {
         kind: "uups"
       });
       await minter.waitForDeployment();
+      minterAddress = await minter.getAddress();
     });
 
   });
@@ -64,11 +70,11 @@ describe("Minter Contract", function () {
     });
 
     it("Set Minter role to avatar contract", async function () {
-      const MINTER_ROLE = await avatarNFT.MINTER_ROLE();
+      const MINTER_ROLE = await MintNFT.MINTER_ROLE();
       const minterAddress = await minter.getAddress();
-      expect(await avatarNFT.hasRole(MINTER_ROLE, minterAddress)).to.be.false;
-      await avatarNFT.grantRole(MINTER_ROLE, minterAddress);
-      expect(await avatarNFT.hasRole(MINTER_ROLE, minterAddress)).to.be.true;
+      expect(await MintNFT.hasRole(MINTER_ROLE, minterAddress)).to.be.false;
+      await MintNFT.grantRole(MINTER_ROLE, minterAddress);
+      expect(await MintNFT.hasRole(MINTER_ROLE, minterAddress)).to.be.true;
     });
 
     it("Set 100 NRGY to user", async function () {
@@ -161,7 +167,13 @@ describe("Minter Contract", function () {
       await expect(minter.getTokenPrice(7500)).to.be.revertedWithCustomError(minter, "INVALID_TIER");
 
     });
+
+    it("Revert if the contract balance is zero to withdraw", async function () {
+      await expect(minter.withdrawFunds(nrgyAddress, managerAddress))
+        .to.be.revertedWithCustomError(minter, "ZERO_BALANCE");
+    });
   });
+
 
 
 
@@ -169,7 +181,7 @@ describe("Minter Contract", function () {
     it("Mint from minter", async function () {
       const tokenId = 1;
       await minter.connect(user).mint(userAddress, tokenId);
-      expect(await avatarNFT.ownerOf(tokenId)).to.be.equal(userAddress);
+      expect(await MintNFT.ownerOf(tokenId)).to.be.equal(userAddress);
     });
 
     it("Check balance of user", async function () {
@@ -191,7 +203,7 @@ describe("Minter Contract", function () {
     it("Mint from user", async function () {
       const tokenId = 500;
       await minter.connect(user).mint(userAddress, tokenId);
-      expect(await avatarNFT.ownerOf(tokenId)).to.be.equal(userAddress);
+      expect(await MintNFT.ownerOf(tokenId)).to.be.equal(userAddress);
     });
 
     it("Bulk Mint from minter", async function () {
@@ -203,13 +215,13 @@ describe("Minter Contract", function () {
 
       await minter.connect(user).bulkMint(userAddress, tokenIds);
       for (let i = 0; i < tokenIds.length; i++) {
-        expect(await avatarNFT.ownerOf(tokenIds[i])).to.be.equal(userAddress);
+        expect(await MintNFT.ownerOf(tokenIds[i])).to.be.equal(userAddress);
       }
     });
 
     it("Mint exceeding maxMintPerWallet", async function () {
 
-      let nftsOfUser2 = await avatarNFT.balanceOf(user2Address);
+      let nftsOfUser2 = await MintNFT.balanceOf(user2Address);
       expect(nftsOfUser2).to.be.equal(0n);
 
       const tokenIds = Array.from({ length: 20 }, (_, i) => i + 51);
@@ -217,10 +229,10 @@ describe("Minter Contract", function () {
       // Mint up to the maxMintPerWallet limit
       await minter.connect(user2).bulkMint(user2Address, tokenIds);
       for (let i = 0; i < tokenIds.length; i++) {
-        expect(await avatarNFT.ownerOf(tokenIds[i])).to.be.equal(user2Address);
+        expect(await MintNFT.ownerOf(tokenIds[i])).to.be.equal(user2Address);
       }
 
-      nftsOfUser2 = await avatarNFT.balanceOf(user2Address);
+      nftsOfUser2 = await MintNFT.balanceOf(user2Address);
       // Attempt to mint one more token, which should exceed the maxMintPerWallet limit
       await expect(minter.connect(user2).mint(user2Address, 333)).to.be.revertedWithCustomError(minter, "MAX_MINT_PER_WALLET_EXCEEDED");
       await expect(minter.connect(user2).bulkMint(user2Address, [333, 334])).to.be.revertedWithCustomError(minter, "MAX_MINT_PER_WALLET_EXCEEDED");
@@ -230,8 +242,14 @@ describe("Minter Contract", function () {
 
       // Mint one more and check if it is successful
       await minter.connect(user2).mint(user2Address, 333);
-      nftsOfUser2 = await avatarNFT.balanceOf(user2Address);
+      nftsOfUser2 = await MintNFT.balanceOf(user2Address);
       expect(nftsOfUser2).to.be.equal(21n);
+    });
+
+
+
+    it("should withdraw funds successfully", async function () {
+      await minter.withdrawFunds(nrgyAddress, managerAddress);
     });
   });
 
