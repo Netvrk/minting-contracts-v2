@@ -1,6 +1,7 @@
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
 import "@openzeppelin/hardhat-upgrades";
+import "hardhat-gas-reporter";
 import { HardhatUserConfig } from "hardhat/config";
 
 import dotenv from "dotenv";
@@ -8,7 +9,15 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.24",
+  solidity: {
+    version: "0.8.24",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
   networks: {
     mainnet: {
       url: process.env.MAINNET_URL || "",
@@ -26,7 +35,7 @@ const config: HardhatUserConfig = {
     },
   },
   gasReporter: {
-    enabled: process.env.REPORT_GAS !== undefined,
+    enabled: false,
     currency: "USD",
   },
   etherscan: {
