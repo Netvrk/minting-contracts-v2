@@ -139,7 +139,7 @@ contract Minter is
      * Can only be called by an account with the MANAGER_ROLE.
      * @param _mintNFTAddress The address of the Avatar NFT contract.
      */
-    function setMintNFTAddress(
+    function setMintNFT(
         address _mintNFTAddress
     ) external onlyRole(MANAGER_ROLE) {
         mintNFT = IMintNFT(_mintNFTAddress);
@@ -150,7 +150,7 @@ contract Minter is
      * Can only be called by an account with the MANAGER_ROLE.
      * @param _paymentTokenAddress The address of the payment token contract.
      */
-    function setPaymentTokenAddress(
+    function setPaymentToken(
         address _paymentTokenAddress
     ) external onlyRole(MANAGER_ROLE) {
         paymentToken = IERC20(_paymentTokenAddress);
@@ -244,6 +244,14 @@ contract Minter is
     }
 
     /**
+     * @dev Returns the address of the Avatar NFT contract.
+     * @return The address of the Avatar NFT contract.
+     */
+    function getMintNFT() external view returns (address) {
+        return address(mintNFT);
+    }
+
+    /**
      * @dev Returns the tier index for the given token ID.
      * @param _tokenId ID of the token.
      * @return The index of the tier.
@@ -304,9 +312,6 @@ contract Minter is
     function _getPrice(uint256 _tokenId) internal view returns (uint256) {
         uint8 tierIndex = _getTokenTier(_tokenId);
         uint256 price = tiers[tierIndex].price;
-        if (price == 0) {
-            revert INVALID_TIER();
-        }
         return price;
     }
 

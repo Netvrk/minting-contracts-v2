@@ -94,6 +94,19 @@ describe("Minter Contract", function () {
       expect(await nrgy.allowance(user2Address, minterAddress)).to.be.equal(allowance);
     });
 
+    it("Set payment token", async function () {
+
+      await expect(minter.connect(user).setPaymentToken(nrgyAddress)).to.be.reverted;
+      await minter.connect(manager).setPaymentToken(nrgyAddress);
+      expect(await minter.getPaymentToken()).to.be.equal(nrgyAddress);
+    });
+
+    it("Set mint nft address", async function () {
+      await expect(minter.connect(user).setMintNFT(MintNFTAddress)).to.be.reverted;
+      await minter.connect(manager).setMintNFT(MintNFTAddress);
+      expect(await minter.getMintNFT()).to.be.equal(MintNFTAddress);
+    });
+
     it("Setup Tiers and Prices", async function () {
       const tier1 = {
         price: ethers.parseEther("1"),
@@ -130,13 +143,16 @@ describe("Minter Contract", function () {
       await minter.connect(manager).setTier(1, tier1.price, tier1.ranges);
       await minter.connect(manager).setTier(2, tier2.price, tier2.ranges);
 
-      await expect(minter.connect(user).setTier(3, tier3.price, tier3.ranges)).to.be.revertedWithCustomError;
+      await expect(minter.connect(manager).setTier(21, tier2.price, tier2.ranges)).to.be.revertedWithCustomError(minter, "INVALID_TIER");
+
+      await expect(minter.connect(user).setTier(3, tier3.price, tier3.ranges)).to.be.reverted;
 
       await minter.connect(manager).setTiers([1, 2, 3], [tier1.price, tier2.price, tier3.price], [tier1.ranges, tier2.ranges, tier3.ranges]);
 
       await expect(minter.connect(manager).setTiers([1, 2], [tier1.price, tier2.price], [tier1.ranges, tier2.ranges, tier3.ranges])).to.be.revertedWithCustomError(minter, "INVALID_ARRAY_LENGTH");
-
-      await expect(minter.connect(manager).setTiers([1, 2], [tier1.price, tier2.price], [tier1.ranges, tier2.ranges,])).to.be.revertedWithCustomError;
+      await expect(minter.connect(manager).setTiers([1, 2], [tier1.price], [tier1.ranges, tier2.ranges])).to.be.revertedWithCustomError(minter, "INVALID_ARRAY_LENGTH");
+      await expect(minter.connect(manager).setTiers([11, 21], [tier1.price, tier2.price], [tier1.ranges, tier2.ranges])).to.be.revertedWithCustomError(minter, "INVALID_TIER");
+      await expect(minter.connect(user).setTiers([1, 2], [tier1.price, tier2.price], [tier1.ranges, tier2.ranges])).to.be.reverted;
     });
 
     it("Check tiers and prices", async function () {
@@ -164,7 +180,6 @@ describe("Minter Contract", function () {
       expect(tier2Price).to.be.equal(ethers.parseEther("2"));
       expect(tier3Price).to.be.equal(ethers.parseEther("3"));
 
-      await expect(minter.getTokenPrice(7500)).to.be.revertedWithCustomError(minter, "INVALID_TIER");
 
     });
 
@@ -213,6 +228,9 @@ describe("Minter Contract", function () {
 
       await expect(minter.connect(user3).bulkMint(user3Address, tokenIds)).to.be.revertedWithCustomError(minter, "INSUFFICIENT_BALANCE");
 
+      const tokenIds3 = [1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123, 1124, 1125, 1126, 1127]
+      await expect(minter.connect(user).bulkMint(userAddress, tokenIds3)).to.be.revertedWithCustomError(minter, "MAX_MINT_PER_WALLET_EXCEEDED");
+
       await minter.connect(user).bulkMint(userAddress, tokenIds);
       for (let i = 0; i < tokenIds.length; i++) {
         expect(await MintNFT.ownerOf(tokenIds[i])).to.be.equal(userAddress);
@@ -240,18 +258,42 @@ describe("Minter Contract", function () {
       // Set max mint per wallet to 30
       await minter.connect(manager).setMaxMintPerWallet(30);
 
+      await expect(minter.connect(user).setMaxMintPerWallet(30)).to.be.reverted;
+
       // Mint one more and check if it is successful
       await minter.connect(user2).mint(user2Address, 333);
       nftsOfUser2 = await MintNFT.balanceOf(user2Address);
       expect(nftsOfUser2).to.be.equal(21n);
     });
 
+    it("Unapprove and test minting, then approve again", async function () {
+      const tokenId = 1000;
+      await nrgy.connect(user).approve(minterAddress, 0);
+      await expect(minter.connect(user).mint(userAddress, tokenId)).to.be.revertedWithCustomError(minter, "NO_ALLOWANCE");
 
+      await nrgy.connect(user).approve(minterAddress, ethers.MaxUint256);
+      await minter.connect(user).mint(userAddress, tokenId);
+      expect(await MintNFT.ownerOf(tokenId)).to.be.equal(userAddress);
+    });
 
     it("should withdraw funds successfully", async function () {
+      await expect(minter.connect(manager).withdrawFunds(nrgyAddress, managerAddress)).to.be.reverted;
       await minter.withdrawFunds(nrgyAddress, managerAddress);
     });
   });
 
+  describe("Test pause unpause", async function () {
+    it("Pause contract", async function () {
+      await expect(minter.connect(user).pause()).to.be.reverted;
+      await minter.connect(manager).pause();
+      await expect(minter.mint(userAddress, 1301)).to.be.reverted;
+    });
+
+    it("Unpause contract", async function () {
+      await expect(minter.connect(user).unpause()).to.be.reverted;
+      await minter.connect(manager).unpause();
+      await minter.connect(user).mint(userAddress, 1301);
+    });
+  });
 
 });
